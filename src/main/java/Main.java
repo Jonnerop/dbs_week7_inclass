@@ -1,8 +1,13 @@
-
 import dao.StudentDAO;
 import dao.InstructorDAO;
+import dao.TrainingSessionDAO;
 import model.Student;
 import model.Instructor;
+import model.TrainingSession;
+import model.Attendance;
+import model.ProgressReport;
+import model.enums.Rank;
+import model.enums.AttendanceStatus;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityManagerFactory;
 import jakarta.persistence.Persistence;
@@ -11,47 +16,67 @@ import java.util.List;
 
 public class Main {
     public static void main(String[] args) {
-        // Create the EntityManagerFactory and EntityManager
         EntityManagerFactory emf = Persistence.createEntityManagerFactory("aikidoPU");
         EntityManager em = emf.createEntityManager();
 
-        // Start a transaction
         em.getTransaction().begin();
 
-        // Initialize DAO classes
-        StudentDAO studentDAO = new StudentDAO(em);
-        InstructorDAO instructorDAO = new InstructorDAO(em);
-
-        // Add sample students
-        Student student1 = new Student("John Doe", "john@example.com", "White Belt", LocalDate.now());
-        Student student2 = new Student("Jane Smith", "jane@example.com", "Yellow Belt", LocalDate.now());
-
-        // Save students using the DAO (no need to call em.persist directly)
-        studentDAO.save(student1);
-        studentDAO.save(student2);
-
-        // Add an instructor
         Instructor instructor = new Instructor("Sensei Aki", "Aikido Throws", 10);
-        instructorDAO.save(instructor);
+        em.persist(instructor);
 
-        // Commit the transaction
+        String uniq = String.valueOf(System.currentTimeMillis());
+        Student s1 = new Student("John Doe", "john+" + uniq + "@example.com", Rank.KYU_6, LocalDate.now());
+        Student s2 = new Student("Jane Smith", "jane+" + uniq + "@example.com", Rank.KYU_5, LocalDate.now().minusMonths(2));
+        em.persist(s1);
+        em.persist(s2);
+
+        TrainingSession session = new TrainingSession(LocalDate.now(), "Helsinki Dojo", 90, instructor);
+        em.persist(session);
+
+        Attendance a1 = new Attendance();
+        a1.setStudent(s1);
+        a1.setSession(session);
+        a1.setStatus(AttendanceStatus.PRESENT);
+        a1.setNotes("Good effort today");
+        em.persist(a1);
+
+        Attendance a2 = new Attendance();
+        a2.setStudent(s2);
+        a2.setSession(session);
+        a2.setStatus(AttendanceStatus.LATE);
+        a2.setNotes("Arrived a bit late");
+        em.persist(a2);
+
+        ProgressReport pr = new ProgressReport(s1, LocalDate.now(), "Making steady progress", "Work on balance");
+        em.persist(pr);
+
         em.getTransaction().commit();
 
-        // Fetch and print students
-        List<Student> students = studentDAO.findAll();
-        System.out.println("Students:");
-        students.forEach(s -> {
-            System.out.println(s.getName() + " - " + s.getRank());
-            System.out.println("Created At: " + s.getCreatedAt());
-            System.out.println("Membership Duration: " + s.getMembershipDuration() + " years");
-        });
+        StudentDAO studentDAO = new StudentDAO(em);
+        InstructorDAO instructorDAO = new InstructorDAO(em);
+        TrainingSessionDAO sessionDAO = new TrainingSessionDAO(em);
 
-        // Fetch and print instructors
-        List<Instructor> instructors = instructorDAO.findAll();
-        System.out.println("Instructors:");
-        instructors.forEach(i -> System.out.println(i.getName() + " - " + i.getSpecialization()));
+        List<TrainingSession> s1Sessions = studentDAO.sessionsForStudent(s1.getId());
+        System.out.println("Sessions for John: " + s1Sessions.size());
 
-        // Close the EntityManager and EntityManagerFactory
+        List<Student> kyus = studentDAO.findByRank(Rank.KYU_6);
+        System.out.println("Students with KYU_6: " + kyus.size());
+
+        List<Instructor> spec = instructorDAO.findBySpecialization("Aikido Throws");
+        System.out.println("Instructors specialized in Aikido Throws: " + spec.size());
+
+        List<Student> recentReports = studentDAO.withReportsLastThreeMonths();
+        System.out.println("Students with reports in last 3 months: " + recentReports.size());
+
+        List<Student> joined6m = studentDAO.joinedLastSixMonths();
+        System.out.println("Students joined last 6 months: " + joined6m.size());
+
+        List<TrainingSession> inHki = sessionDAO.inLocation("Helsinki Dojo");
+        System.out.println("Sessions in Helsinki Dojo: " + inHki.size());
+
+        List<Instructor> exp5 = instructorDAO.experienceMoreThanFive();
+        System.out.println("Instructors with > 5 years: " + exp5.size());
+
         em.close();
         emf.close();
     }
